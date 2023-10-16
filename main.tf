@@ -37,10 +37,6 @@ locals {
   }
 }
 
-output "test" {
-  value = local.dns_ip_addresses
-}
-
 module "nlb" {
   source                   = "cloudposse/nlb/aws"
   version                  = "0.14.0"
