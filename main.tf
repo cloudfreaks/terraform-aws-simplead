@@ -69,3 +69,34 @@ resource "aws_vpc_dhcp_options_association" "dns_resolver" {
   vpc_id          = var.vpc_id
   dhcp_options_id = aws_vpc_dhcp_options.dns_resolver.id
 }
+
+# VPC AD ENDPOINT
+
+module "vpc_endpoints" {
+  count   = var.enable_vpc_endpoint ? 1 : 0
+  source  = "cloudposse/vpc/aws//modules/vpc-endpoints"
+  version = "2.1.0"
+  vpc_id  = var.vpc_id
+  context = module.this.context
+
+  interface_vpc_endpoints = {
+    "simple_ad" = {
+      name = "ds",
+      private_dns_enabled = true,
+      security_group_ids = [aws_directory_service_directory.simple_ad.security_group_id],
+      subnet_ids = random_shuffle.az.result,
+      policy = jsonencode({
+         "Statement": [
+            {
+               "Principal": "*",
+               "Effect": "Allow",
+               "Action": [
+                  "ds:ConnectDirectory"
+               ],
+               "Resource":"*"
+            }
+         ]
+      })
+    }
+  }
+}

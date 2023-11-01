@@ -54,3 +54,9 @@ variable "internal" {
   description = "A boolean flag to determine whether the ALB which will target the LDAP server should be internal."
   default     = false
 }
+
+variable "enable_vpc_endpoint" {
+  type        = bool
+  description = "A boolean flag to enable the creation of an Interface VPC Endpoints to provision into the VPC to allow other VPCs to access the directory."
+  default     = false
+}
