@@ -80,7 +80,7 @@ module "vpc_endpoints" {
   context = module.this.context
 
   interface_vpc_endpoints = {
-    "simple_ad" = {
+    "privatelink" = {
       name = "ds",
       private_dns_enabled = true,
       security_group_ids = [aws_directory_service_directory.simple_ad.security_group_id],
