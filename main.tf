@@ -11,9 +11,15 @@ data "aws_subnets" "available" {
   }
 }
 
-resource "random_shuffle" "az" {
-  input        = length(var.directory_subnet_ids) >= 2 ? var.directory_subnet_ids : data.aws_subnets.available.ids
-  result_count = 2
+data "aws_subnet" "private" {
+  count = length(data.aws_subnets.available.ids)
+  id    = data.aws_subnets.available.ids[count.index]
+}
+
+locals {
+  ids_sorted_by_az = values(zipmap(data.aws_subnet.private.*.availability_zone, data.aws_subnet.private.*.id))
+  # Simple AD requires exactly 2 subnets
+  ad_subnets       = slice(local.ids_sorted_by_az, 0, 2)
 }
 
 resource "aws_directory_service_directory" "simple_ad" {
@@ -25,7 +31,7 @@ resource "aws_directory_service_directory" "simple_ad" {
 
   vpc_settings {
     vpc_id     = var.vpc_id
-    subnet_ids = random_shuffle.az.result
+    subnet_ids = local.ad_subnets
   }
 
   tags = module.this.tags
@@ -41,10 +47,14 @@ module "nlb" {
   source                   = "cloudposse/nlb/aws"
   version                  = "0.14.0"
   vpc_id                   = var.vpc_id
-  subnet_ids               = length(var.nlb_subnet_ids) >= 2 ? var.nlb_subnet_ids : random_shuffle.az.result
+  subnet_ids               = data.aws_subnets.available.ids
   internal                 = var.internal
+  certificate_arn          = var.nlb_certificate_arn
   tcp_enabled              = true
   tcp_port                 = 389
+  tls_enabled              = true
+  tls_port                 = 636
+  tls_ssl_policy           = "ELBSecurityPolicy-TLS13-1-2-2021-06"
   access_logs_enabled      = false
   target_group_port        = 389
   target_group_target_type = "ip"
@@ -68,4 +78,29 @@ resource "aws_vpc_dhcp_options" "dns_resolver" {
 resource "aws_vpc_dhcp_options_association" "dns_resolver" {
   vpc_id          = var.vpc_id
   dhcp_options_id = aws_vpc_dhcp_options.dns_resolver.id
+}
+
+# VPC AD ENDPOINT
+
+locals {
+  allowed_principals = [for account_id in var.allowed_account_ids: "arn:aws:iam::${account_id}:root"]
+}
+
+resource "aws_vpc_endpoint_service" "simplead" {
+  acceptance_required        = false
+  allowed_principals         = local.allowed_principals
+  network_load_balancer_arns = [module.nlb.nlb_arn]
+  private_dns_name           = var.private_dns_name
+  supported_ip_address_types = ["ipv4"]
+
+  tags = module.this.tags
+}
+
+resource "aws_route53_record" "dns_validation" {
+  count   = var.private_dns_name_validation ? 1 : 0
+  zone_id = var.private_dns_name_zone_id
+  name    = join("", aws_vpc_endpoint_service.simplead.private_dns_name_configuration[*].name)
+  type    = join("", aws_vpc_endpoint_service.simplead.private_dns_name_configuration[*].type)
+  ttl     = 1800
+  records = [join("", aws_vpc_endpoint_service.simplead.private_dns_name_configuration[*].value)]
 }
