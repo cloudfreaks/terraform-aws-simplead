@@ -14,7 +14,7 @@ output "security_group_id" {
 }
 
 output "subnet_ids" {
-  value       = random_shuffle.az.result
+  value       = local.ad_subnets
   description = "The identifiers of the subnets for the directory servers."
 }
 
@@ -26,4 +26,19 @@ output "dns_ip_addresses" {
 output "nlb_dns_name" {
   value       = module.nlb.nlb_dns_name
   description = "DNS name of Network LoadBalancer."
+}
+
+output "private_dns_name_configuration_name" {
+  value       = var.private_dns_name_validation ? null : join("", aws_vpc_endpoint_service.simplead.private_dns_name_configuration[*].name)
+  description = "Name of the TXT record for the endpoint service private DNS name validation."
+}
+
+output "private_dns_name_configuration_value" {
+  value       = var.private_dns_name_validation ? null : join("", aws_vpc_endpoint_service.simplead.private_dns_name_configuration[*].value)
+  description = "Value to set into DNS TXT record for the endpoint service private DNS name validation."
+}
+
+output "service_name" {
+  value       = aws_vpc_endpoint_service.simplead.service_name
+  description = "Service name of the PrivateLink endpoint."
 }
